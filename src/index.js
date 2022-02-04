@@ -1,14 +1,13 @@
 const express = require("express");
 const { MongoClient } = require("mongodb");
 const ObjectId = require("mongodb").ObjectId;
-const fileUpload = require("express-fileupload");
 require("dotenv").config();
 const port = process.env.PORT || 5000;
 const app = express();
-
+const cors = require("cors");
 // User middleWare
 app.use(express.json());
-
+app.use(cors());
 app.get("/", (req, res) => {
   res.send(
     "This is home page on this server! the server name is Work management application"
@@ -17,6 +16,7 @@ app.get("/", (req, res) => {
 
 // Connect with server___
 const uri = process.env.MONGO_URL;
+console.log(uri);
 const client = new MongoClient(uri, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
@@ -28,6 +28,7 @@ async function run() {
     const database = client.db("workManagementApplication");
     const worksCollection = database.collection("works");
     const studentsCollection = database.collection("students");
+    const completeCollection = database.collection("complete");
 
     // Here work related operation=====================
     // Create a new work____________
@@ -57,23 +58,38 @@ async function run() {
       const result = await worksCollection.findOne(query);
       res.json(result);
     });
-
-    // Here User related operation=========================
+    // Complete task for student_________________
+    app.post("/complete", async (req, res) => {
+      const task = req.body;
+      const result = await completeCollection.insertOne(task);
+      res.json(result);
+    });
+    app.get("/complete", async (req, res) => {
+      const cursor = completeCollection.find({});
+      const complete = await cursor.toArray();
+      res.json(complete);
+    });
+    // Get complete order filtered by email
+    app.get("/completeEmail/:mail", async (req, res) => {
+      const email = req.params.mail;
+      console.log(email);
+      const query = { email: email };
+      const cursor = completeCollection.find(query);
+      const complete = await cursor.toArray();
+      res.json(complete);
+    });
+    // Delete Here a single complete Work____________
+    app.delete("/complete/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: ObjectId(id) };
+      const result = await completeCollection.deleteOne(query);
+      console.log(result);
+      res.json(result);
+    });
+    // Here Student related operation=========================
     // Create a new work____________
     app.post("/create-student", async (req, res) => {
-      const task_name = req.body.task_name;
-      const creator = req.body.creator;
-      const task_thumbnail = req.body.task_thumbnail;
-      const body = req.body.body;
-      const encodedPic = picData.toString("base64");
-      const imageBuffer = Buffer.from(encodedPic, "base64");
-      const work = {
-        task_name,
-        creator,
-        task_thumbnail,
-        body,
-        image: imageBuffer,
-      };
+      const work = req.body;
       const result = await studentsCollection.insertOne(work);
       res.json(result);
     });
@@ -83,20 +99,24 @@ async function run() {
       const works = await cursor.toArray();
       res.json(works);
     });
-    // Delete a work___________
-    app.delete("/students/:id", async (req, res) => {
-      const id = req.params.id;
-      const query = { _id: ObjectId(id) };
-      const result = await studentsCollection.deleteOne(query);
-      console.log(result);
+    // Create Admin____________
+    app.put("/users/admin", async (req, res) => {
+      const user = req.body;
+      const filter = { email: user.email };
+      const updateDoc = { $set: { role: "admin" } };
+      const result = await studentsCollection.updateOne(filter, updateDoc);
       res.json(result);
     });
-    // Load a work___________
-    app.get("/students/:id", async (req, res) => {
-      const id = req.params.id;
-      const query = { _id: ObjectId(id) };
-      const result = await studentsCollection.findOne(query);
-      res.json(result);
+    // Get Admin checking by email____________
+    app.get("/users/:email", async (req, res) => {
+      const email = req.params.email;
+      const query = { email: email };
+      const user = await studentsCollection.findOne(query);
+      let isAdmin = false;
+      if (user?.role === "admin") {
+        isAdmin = true;
+      }
+      res.json({ admin: isAdmin });
     });
   } finally {
     // await client.close();
